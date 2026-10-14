@@ -106,6 +106,7 @@ dl.stats dd small{display:block;font-weight:400;color:var(--dim);font-size:11px}
     <div class="mission"><span class="eyebrow">Base Kestrel · Gulf Coast</span><b id="hWave">WAVE 1 / 8</b></div>
     <div class="stat"><span>BUDGET</span><b id="hBudget">$40M</b></div>
     <div class="stat"><span>MAGAZINE</span><b id="hMag">10</b></div>
+    <div class="stat"><span>MISSILES FIRED</span><b id="hSpend">0 · $0M</b></div>
     <div class="stat"><span>STRUCTURES</span><b id="hAssets">4 / 4</b></div>
     <div class="hudbtns"><button id="bPause" class="icon" aria-label="Pause">PAUSE</button><button id="bMute" class="icon" aria-label="Toggle sound">SOUND ON</button></div>
   </header>
@@ -121,7 +122,7 @@ dl.stats dd small{display:block;font-weight:400;color:var(--dim);font-size:11px}
         <p>You run the last battery on base. Interceptors cost $3M each. Most of what's coming costs a lot less. Spend accordingly.</p>
         <ul>
           <li><b>Tap or click the sky</b> to detonate an interceptor there. Lead the target: aim where it will be.</li>
-          <li><b>Switch to GUN</b> and hold to fire at drones and cruise missiles. Cheap, short range, overheats.</li>
+          <li><b>Switch to GUN</b> and hold to fire at drones and cruise missiles. Cheap, reaches a good way up, overheats.</li>
           <li><b>Slide the RADAR</b> to sweep the sky. You only see what the sector covers, plus anything close to base.</li>
           <li><b>Red ground markers</b> mean a threat will hit something you care about. Grey markers mean open desert. Let those go.</li>
           <li><b>Clusters split</b> at the dashed line. One kill above it saves five below it.</li>
@@ -186,7 +187,7 @@ const $=s=>document.querySelector(s);
 const stage=$('#stage'),cvs=$('#cv'),ctx=cvs.getContext('2d'),radarEl=$('#radar');
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>v<a?a:v>b?b:v,TAU=Math.PI*2,D2R=Math.PI/180;
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const H=600,GY=556,SPLIT_Y=250,VIS_R=140,GUN_RANGE=240,TOUCH_OFF=64;
+const H=600,GY=556,SPLIT_Y=250,VIS_R=140,GUN_RANGE=360,TOUCH_OFF=64;
 let W=1000,SC=1,OX=0,OY=0,DPR=1,CW=1,CH=1;
 const COL={phos:'#62f0b4',amber:'#ffb24a',red:'#ff5b4f',blue:'#70b8ff',sand:'#c7a46e',dim:'#7d948d',cm:'#ff8a4a'};
 const TV={tbm:2,clu:4,sub:.25,cm:1.5,uas:.05,frnd:0};      // what each threat cost the enemy, $M
@@ -211,7 +212,7 @@ const WAVES=[
 ];
 const ASSET_DEF=[{name:'FUEL DEPOT',fx:.12,kind:'fuel'},{name:'HANGAR',fx:.29,kind:'hangar'},{name:'OPS CENTER',fx:.71,kind:'ops'},{name:'BARRACKS',fx:.88,kind:'barracks'}];
 
-let G=null,assets=[],battery={hp:3,max:3},threats=[],ints=[],blasts=[],bullets=[],parts=[],ticks=[],craters=[],uid=0;
+let floats=[],G=null,assets=[],battery={hp:3,max:3},threats=[],ints=[],blasts=[],bullets=[],parts=[],ticks=[],craters=[],uid=0;
 const stars=Array.from({length:90},()=>({x:Math.random(),y:Math.random()*.8,a:rnd(.12,.55)}));
 const ridge=Array.from({length:41},()=>rnd(6,26));
 
@@ -255,7 +256,7 @@ function newGame(title){
   radarEl.value=50;setWeapon('int');
   if(title)show('#ovTitle');else showBrief();
 }
-function newWS(){return{kills:{tbm:0,clu:0,sub:0,cm:0,uas:0},fired:0,hits:0,rounds:0,spend:0,value:0,ignored:0,assetHits:0,friendly:0,intOnDrone:0,splits:0}}
+function newWS(){return{added:false,kills:{tbm:0,clu:0,sub:0,cm:0,uas:0},fired:0,hits:0,rounds:0,spend:0,value:0,ignored:0,assetHits:0,friendly:0,intOnDrone:0,splits:0}}
 function showBrief(){
   const d=WAVES[G.wave];G.mode='brief';
   $('#brWave').textContent=`Wave ${G.wave+1} of ${WAVES.length}`;$('#brName').textContent=d.name;$('#brText').textContent=d.brief;
@@ -273,7 +274,7 @@ function buildEvents(plan){
 function startWave(){
   initAudio();
   G.events=buildEvents(WAVES[G.wave].plan);G.t=0;G.ws=newWS();G.endTimer=0;G.lost=false;G.heat=0;G.hot=false;
-  threats=[];ints=[];blasts=[];bullets=[];ticks=[];
+  threats=[];ints=[];blasts=[];bullets=[];ticks=[];floats=[];
   G.mode='play';show(null);
 }
 
@@ -328,7 +329,7 @@ function fireInt(x,y){
   y=clamp(y,4,GY-16);x=clamp(x,0,W);
   G.mag--;G.cd=.33;G.ws.fired++;G.ws.spend+=INT_COST;
   const sx=W/2-14,sy=GY-26;G.launchAng=Math.atan2(y-sy,x-sx);
-  ints.push({x:sx,y:sy,tx:x,ty:y,sp:300,trail:[]});sfx.launch();buzz(15);
+  ints.push({x:sx,y:sy,tx:x,ty:y,sp:300,trail:[]});floats.push({x:sx,y:sy-14,t:1.1,txt:`−$${INT_COST}M`});sfx.launch();buzz(15);
   if(G.mag===3)toast('MAGAZINE LOW','warn');
 }
 function fireRound(){
@@ -386,6 +387,7 @@ function update(dt,real){
   for(const a of assets)if(a.hp<a.max&&Math.random()<dt*(a.hp?3:6))parts.push({x:a.x+rnd(-12,12),y:GY-12,vx:rnd(-4,8),vy:rnd(-24,-14),life:2.2,max:2.2,col:'smoke',g:0});
   for(const p of parts){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=p.g*dt;p.life-=dt;if(p.life<=0)p.dead=true}
   for(const k of ticks){k.t-=dt;if(k.t<=0)k.dead=true}
+  for(const f of floats){f.t-=dt;f.y-=22*dt;if(f.t<=0)f.dead=true}floats=floats.filter(f=>!f.dead);
   threats=threats.filter(t=>!t.dead);ints=ints.filter(x=>!x.dead);blasts=blasts.filter(x=>!x.dead);bullets=bullets.filter(x=>!x.dead);parts=parts.filter(x=>!x.dead);ticks=ticks.filter(x=>!x.dead);
   G.shake=Math.max(0,G.shake-30*real);
 
@@ -394,7 +396,7 @@ function update(dt,real){
 }
 
 /* ---------- debrief, shop, end ---------- */
-function addTotals(){const w=G.ws,T=G.tot;T.value+=w.value;T.spend+=w.spend;T.fired+=w.fired;T.hits+=w.hits;T.friendly+=w.friendly}
+function addTotals(){const w=G.ws,T=G.tot;if(w.added)return;w.added=true;T.value+=w.value;T.spend+=w.spend;T.fired+=w.fired;T.hits+=w.hits;T.friendly+=w.friendly}
 function tipFor(w){
   if(w.friendly)return`You shot down a friendly aircraft. Blue tracks are ours. Check the tag before you fire into a crowded sky.`;
   if(w.intOnDrone)return`${w.intOnDrone} drone${w.intOnDrone>1?'s':''} killed with interceptors. That is $3M to stop $50K. The gun exists for exactly this.`;
@@ -408,7 +410,9 @@ function statsHTML(w){
   const br=Object.entries(w.kills).filter(([,v])=>v).map(([k,v])=>`${v} ${TAG[k].toLowerCase()}`).join(' · ')||'none';
   return`<dt>Threats destroyed</dt><dd>${n}<small>${br}</small></dd>
   <dt>Threat value destroyed</dt><dd>${money(w.value)}</dd>
-  <dt>Your spend</dt><dd>${money(w.spend)}<small>${w.fired} interceptors · ${w.rounds} gun rounds</small></dd>
+  <dt>Interceptor cost</dt><dd>${money(w.fired*INT_COST)}<small>${w.fired} fired × $${INT_COST}M each</small></dd>
+  <dt>Campaign interceptor cost</dt><dd>${money(G.tot.fired*INT_COST)}<small>${G.tot.fired} fired since wave 1</small></dd>
+  <dt>Total spend</dt><dd>${money(w.spend)}<small>${w.fired} interceptors · ${w.rounds} gun rounds</small></dd>
   <dt>Cost exchange</dt><dd class="${ratio>=1?'good':'bad'}">${ratio.toFixed(2)} : 1</dd>
   <dt>Interceptor accuracy</dt><dd>${w.fired?Math.round(w.hits/w.fired*100)+'%':'n/a'}</dd>
   <dt>Let through to open desert</dt><dd>${w.ignored}</dd>
@@ -458,7 +462,8 @@ function endGame(win){
     ?(ratio>=1?'You made them pay more for every attack than it cost you to stop it. That is the job.':'You held, but you bought the win with interceptors you did not need to spend. Next time, let more of the desert hits go.')
     :(battery.hp<=0?'The battery went down and the base went with it. Protect the launcher first; everything else depends on it.':'Every structure is rubble. Triage harder: the gun for cheap threats, interceptors for the ones aimed at something.');
   $('#endStats').innerHTML=`<dt>Threat value destroyed</dt><dd>${money(T.value)}</dd>
-  <dt>Defense spend</dt><dd>${money(T.spend)}<small>${T.fired} interceptors fired</small></dd>
+  <dt>Interceptor cost</dt><dd>${money(T.fired*INT_COST)}<small>${T.fired} fired × $${INT_COST}M each</small></dd>
+  <dt>Total defense spend</dt><dd>${money(T.spend)}<small>interceptors plus gun rounds</small></dd>
   <dt>Cost exchange</dt><dd class="${ratio>=1?'good':'bad'}">${ratio.toFixed(2)} : 1</dd>
   <dt>Interceptor accuracy</dt><dd>${T.fired?Math.round(T.hits/T.fired*100)+'%':'n/a'}</dd>
   <dt>Structures standing</dt><dd>${intact} / ${assets.length}</dd>
@@ -625,6 +630,7 @@ function drawFire(){
     else{ctx.globalAlpha=a;ctx.fillStyle=p.col;ctx.fillRect(p.x-1,p.y-1,2,2);ctx.globalAlpha=1}
   }
 }
+function drawFloats(){ctx.textAlign='center';ctx.font=`600 ${lw(11)}px "IBM Plex Mono",monospace`;for(const f of floats){ctx.globalAlpha=Math.min(1,f.t*1.5);ctx.fillStyle=COL.amber;ctx.fillText(f.txt,f.x,f.y)}ctx.globalAlpha=1}
 function drawAim(){
   if(!G||G.mode!=='play'||G.paused)return;
   if(G.weapon==='gun'){ctx.setLineDash([lw(3),lw(6)]);ctx.strokeStyle=G.hot?'rgba(255,91,79,.35)':'rgba(255,178,74,.28)';ctx.lineWidth=lw(1);ctx.beginPath();ctx.arc(W/2+34,GY-22,GUN_RANGE,Math.PI,TAU);ctx.stroke();ctx.setLineDash([])}
@@ -643,7 +649,7 @@ function draw(time){
   ctx.save();ctx.beginPath();ctx.rect(0,0,W,H);ctx.clip();
   drawSky(time);drawRadar(time);drawGround();
   assets.forEach(drawStructure);drawBattery();
-  drawThreats(time);drawFire();drawAim();
+  drawThreats(time);drawFire();drawFloats();drawAim();
   ctx.restore();
 }
 function hud(){
@@ -651,6 +657,7 @@ function hud(){
   setTxt('#hWave',`WAVE ${G.wave+1} / ${WAVES.length}`);setTxt('#hBudget',money(G.budget));
   setTxt('#hMag',String(G.mag));$('#hMag').classList.toggle('low',G.mag<=3);
   setTxt('#hAssets',`${assets.filter(a=>a.hp>0).length} / ${assets.length}`);
+  const fired=G.tot.fired+(G.ws.added?0:G.ws.fired);setTxt('#hSpend',`${fired} · ${money(fired*INT_COST)}`);
   setTxt('#sInt',`$3M per shot · ${G.mag} left`);
   const hf=$('#heatFill');hf.style.width=Math.min(100,G.heat)+'%';hf.classList.toggle('hot',G.hot);
   setTxt('#sRad',G.theta>108?'LEFT':G.theta<72?'RIGHT':'CENTER');
