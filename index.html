@@ -187,7 +187,7 @@ const $=s=>document.querySelector(s);
 const stage=$('#stage'),cvs=$('#cv'),ctx=cvs.getContext('2d'),radarEl=$('#radar');
 const rnd=(a,b)=>a+Math.random()*(b-a),clamp=(v,a,b)=>v<a?a:v>b?b:v,TAU=Math.PI*2,D2R=Math.PI/180;
 const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const H=600,GY=556,SPLIT_Y=250,VIS_R=140,GUN_RANGE=360,TOUCH_OFF=64;
+const H=600,GY=556,SPLIT_Y=250,VIS_R=140,GUN_RANGE=270,TOUCH_OFF=64;
 let W=1000,SC=1,OX=0,OY=0,DPR=1,CW=1,CH=1;
 const COL={phos:'#62f0b4',amber:'#ffb24a',red:'#ff5b4f',blue:'#70b8ff',sand:'#c7a46e',dim:'#7d948d',cm:'#ff8a4a'};
 const TV={tbm:2,clu:4,sub:.25,cm:1.5,uas:.05,frnd:0};      // what each threat cost the enemy, $M
